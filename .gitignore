@@ -1,0 +1,35 @@
+# Flutter / Dart
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+.dart_tool/
+.packages
+.pub-cache/
+pubspec.lock
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/app/build/
+
+# Node
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Environment
+.env
+.env.local
+
+# Large video files and logs
+*.mp4
+*.log
+backend/videos/
+backend/backend-server.log
+backend-server.log
+web-server.log
+
+# IDE
+.idea/
+.vscode/
+*.iml

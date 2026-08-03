@@ -1,0 +1,16 @@
+name: streamplus_flutter
+description: StreamPlus Studio - Aplicación de multistreaming
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.1.0
+  file_picker: ^8.0.0
+  provider: ^6.1.0
+
+flutter:
+  uses-material-design: true
