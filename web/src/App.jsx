@@ -23,6 +23,24 @@ function App() {
     tiktok: false,
     twitter: false
   })
+
+  const [streamKeys, setStreamKeys] = useState(() => {
+    try {
+      const saved = localStorage.getItem('streamplus_keys')
+      return saved ? JSON.parse(saved) : {
+        youtube: '',
+        facebook: '',
+        twitch: '',
+        instagram: '',
+        tiktok: '',
+        twitter: ''
+      }
+    } catch (e) {
+      return { youtube: '', facebook: '', twitch: '', instagram: '', tiktok: '', twitter: '' }
+    }
+  })
+
+  const [showKeys, setShowKeys] = useState({})
   
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamDuration, setStreamDuration] = useState(0)
@@ -33,6 +51,20 @@ function App() {
   const [description, setDescription] = useState('¡Acompáñame en esta nueva transmisión!')
   
   const [notification, setNotification] = useState(null)
+
+  const updateStreamKey = (platform, key) => {
+    setStreamKeys(prev => {
+      const updated = { ...prev, [platform]: key }
+      try {
+        localStorage.setItem('streamplus_keys', JSON.stringify(updated))
+      } catch (e) {}
+      return updated
+    })
+  }
+
+  const toggleShowKey = (platform) => {
+    setShowKeys(prev => ({ ...prev, [platform]: !prev[platform] }))
+  }
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -47,7 +79,6 @@ function App() {
       interval = setInterval(() => {
         setStreamDuration(prev => prev + 1)
       }, 1000)
-      // poll backend for viewers info
       fetchStatus()
       statusInterval = setInterval(() => fetchStatus(), 3000)
     }
@@ -67,7 +98,7 @@ function App() {
 
   const showNotification = (message, isError = false) => {
     setNotification({ message, isError })
-    setTimeout(() => setNotification(null), 3000)
+    setTimeout(() => setNotification(null), 4000)
   }
 
   const loadVideos = async () => {
@@ -109,7 +140,13 @@ function App() {
 
     const activePlatforms = Object.keys(platforms).filter(p => platforms[p])
     if (activePlatforms.length === 0) {
-      showNotification('Selecciona al menos una plataforma', true)
+      showNotification('Selecciona al menos una red social para transmitir', true)
+      return
+    }
+
+    const missingKeys = activePlatforms.filter(p => !streamKeys[p] || streamKeys[p].trim() === '')
+    if (missingKeys.length > 0) {
+      showNotification(`Ingresa la Clave de Transmisión (Stream Key) para: ${missingKeys.map(p => p.toUpperCase()).join(', ')}`, true)
       return
     }
 
@@ -117,6 +154,7 @@ function App() {
       const response = await axios.post(`${API_URL}/stream/start`, {
         videoId: selectedVideo.id,
         platforms: activePlatforms,
+        streamKeys,
         title,
         description
       })
@@ -125,9 +163,10 @@ function App() {
       setCurrentStreamId(response.data.streamId)
       setStreamDuration(0)
       setViewers(0)
-      showNotification('Transmisión iniciada')
+      showNotification('🚀 Transmisión en vivo iniciada exitosamente')
     } catch (error) {
-      showNotification('Error al iniciar transmisión', true)
+      const errMsg = error.response?.data?.error || 'Error al iniciar transmisión'
+      showNotification(errMsg, true)
     }
   }
 
@@ -523,31 +562,123 @@ function App() {
             </div>
 
             <div style={{ ...styles.card, marginTop: '24px' }}>
-              <h2 style={{ fontSize: '18px', fontWeight: 'bold', marginBottom: '16px' }}>Redes Sociales</h2>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {Object.keys(platforms).map((platform) => (
-                  <button
-                    key={platform}
-                    onClick={() => !isStreaming && setPlatforms(prev => ({
-                      ...prev,
-                      [platform]: !prev[platform]
-                    }))}
-                    disabled={isStreaming}
-                    style={{
-                      ...styles.platformButton,
-                      backgroundColor: platforms[platform] ? '#4f46e5' : '#1e293b',
-                      color: platforms[platform] ? 'white' : '#94a3b8',
-                      opacity: isStreaming ? 0.5 : 1
-                    }}
-                  >
-                    {platform.toUpperCase()}
-                  </button>
-                ))}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 'bold', margin: 0 }}>Redes Sociales & Claves RTMP</h2>
+                <span style={{ fontSize: '11px', color: '#22c55e', backgroundColor: 'rgba(34, 197, 94, 0.1)', padding: '4px 8px', borderRadius: '6px', fontWeight: 'bold' }}>🔑 Autoguardado</span>
               </div>
               
-              <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(79, 70, 229, 0.1)', borderRadius: '8px' }}>
-                <p style={{ fontSize: '12px', color: '#94a3b8', margin: 0 }}>
-                  💡 Selecciona las plataformas donde quieres transmitir. Los stream keys están configurados en el backend.
+              <p style={{ fontSize: '12px', color: '#94a3b8', marginBottom: '16px' }}>
+                Activa tus redes sociales e ingresa la <b>Clave de Transmisión (Stream Key)</b> de cada una para emitir en vivo simultáneamente:
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {[
+                  { id: 'youtube', name: 'YouTube Live', icon: '🔴', color: '#ef4444', hint: 'YouTube Studio ➔ Transmitir en vivo ➔ Clave de emisión' },
+                  { id: 'facebook', name: 'Facebook Live', icon: '🔵', color: '#3b82f6', hint: 'Facebook Live Producer ➔ Usar clave de transmisión' },
+                  { id: 'twitch', name: 'Twitch', icon: '🟣', color: '#a855f7', hint: 'Twitch Dashboard ➔ Configuración ➔ Clave de transmisión' },
+                  { id: 'instagram', name: 'Instagram Live', icon: '📸', color: '#ec4899', hint: 'Instagram Live Producer ➔ Clave de transmisión RTMP' },
+                  { id: 'tiktok', name: 'TikTok Live', icon: '🎵', color: '#06b6d4', hint: 'TikTok LIVE Studio / Creator Center ➔ Stream Key' },
+                  { id: 'twitter', name: 'Twitter / X', icon: '🐦', color: '#0ea5e9', hint: 'X Media Studio / Producer ➔ Key de emisión' }
+                ].map((p) => {
+                  const isEnabled = platforms[p.id]
+                  const keyVal = streamKeys[p.id] || ''
+                  const isKeyVisible = showKeys[p.id]
+
+                  return (
+                    <div
+                      key={p.id}
+                      style={{
+                        backgroundColor: isEnabled ? 'rgba(79, 70, 229, 0.1)' : '#020617',
+                        border: isEnabled ? `1.5px solid ${p.color}` : '1px solid #1e293b',
+                        borderRadius: '12px',
+                        padding: '12px 14px',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div 
+                          style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: isStreaming ? 'not-allowed' : 'pointer', flex: 1 }} 
+                          onClick={() => !isStreaming && setPlatforms(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                        >
+                          <span style={{ fontSize: '18px' }}>{p.icon}</span>
+                          <div>
+                            <span style={{ fontWeight: 'bold', fontSize: '14px', color: 'white' }}>{p.name}</span>
+                            <span style={{ fontSize: '11px', color: isEnabled ? p.color : '#64748b', marginLeft: '8px', fontWeight: 'bold' }}>
+                              {isEnabled ? '🟢 ACTIVA' : '⚪ INACTIVA'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => !isStreaming && setPlatforms(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
+                          disabled={isStreaming}
+                          style={{
+                            padding: '6px 14px',
+                            borderRadius: '8px',
+                            border: 'none',
+                            backgroundColor: isEnabled ? p.color : '#1e293b',
+                            color: 'white',
+                            fontWeight: 'bold',
+                            fontSize: '12px',
+                            cursor: isStreaming ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {isEnabled ? 'Activada ✓' : '+ Activar'}
+                        </button>
+                      </div>
+
+                      {isEnabled && (
+                        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                            <input
+                              type={isKeyVisible ? 'text' : 'password'}
+                              value={keyVal}
+                              onChange={(e) => updateStreamKey(p.id, e.target.value)}
+                              disabled={isStreaming}
+                              placeholder={`Pegar Clave de Transmisión (Stream Key) de ${p.name}...`}
+                              style={{
+                                flex: 1,
+                                backgroundColor: '#1e293b',
+                                border: '1px solid #334155',
+                                borderRadius: '8px',
+                                padding: '10px 12px',
+                                color: 'white',
+                                fontSize: '13px',
+                                fontFamily: 'monospace'
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => toggleShowKey(p.id)}
+                              style={{
+                                backgroundColor: '#1e293b',
+                                border: '1px solid #334155',
+                                borderRadius: '8px',
+                                padding: '10px 12px',
+                                color: '#94a3b8',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                fontWeight: 'bold'
+                              }}
+                              title={isKeyVisible ? 'Ocultar Clave' : 'Mostrar Clave'}
+                            >
+                              {isKeyVisible ? '🙈 Ocultar' : '👁️ Ver'}
+                            </button>
+                          </div>
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '6px' }}>
+                            💡 {p.hint}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div style={{ marginTop: '16px', padding: '12px', backgroundColor: 'rgba(79, 70, 229, 0.1)', borderRadius: '8px', border: '1px solid rgba(79, 70, 229, 0.2)' }}>
+                <p style={{ fontSize: '12px', color: '#c7d2fe', margin: 0 }}>
+                  ⚡ <b>Multistreaming Activo:</b> Al iniciar la transmisión, FFmpeg enviará la señal simultáneamente a todas las redes sociales activadas usando tus claves.
                 </p>
               </div>
             </div>
@@ -561,10 +692,12 @@ function App() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '8px'
+                gap: '8px',
+                padding: '16px',
+                fontSize: '18px'
               }}
             >
-              {isStreaming ? '⏹ Detener Transmisión' : '▶ Iniciar Transmisión'}
+              {isStreaming ? '⏹ Detener Transmisión en Vivo' : '▶ Iniciar Transmisión en Vivo'}
             </button>
           </div>
         </div>

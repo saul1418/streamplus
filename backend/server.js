@@ -30,6 +30,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('uploads'));
 
+// Servir la aplicación Web dist compilada
+const webDistPath = path.join(__dirname, '../web/dist');
+if (fs.existsSync(webDistPath)) {
+  app.use(express.static(webDistPath));
+}
+
 // Session middleware
 app.use(session({
   secret: process.env.SESSION_SECRET || 'streamplus-secret',
@@ -326,20 +332,40 @@ app.post('/api/schedule', (req, res) => {
 // 4. Iniciar transmisión inmediata
 app.post('/api/stream/start', (req, res) => {
   try {
-    const { videoId, platforms: selectedPlatforms, title, description } = req.body;
+    const { videoId, platforms: selectedPlatforms, streamKeys, title, description } = req.body;
 
     if (!videoId || !selectedPlatforms || selectedPlatforms.length === 0) {
-      return res.status(400).json({ error: 'Faltan parámetros requeridos' });
+      return res.status(400).json({ error: 'Faltan parámetros requeridos (videoId y plataformas)' });
+    }
+
+    // Actualizar stream keys si vienen en la petición
+    if (streamKeys && typeof streamKeys === 'object') {
+      Object.keys(streamKeys).forEach(p => {
+        if (platforms[p] && streamKeys[p]) {
+          platforms[p].key = streamKeys[p].trim();
+        }
+      });
+    }
+
+    // Validar que las plataformas seleccionadas tengan Stream Key
+    const missingKeys = selectedPlatforms.filter(p => !platforms[p] || !platforms[p].key);
+    if (missingKeys.length > 0) {
+      return res.status(400).json({ 
+        error: `Ingresa la Clave de Transmisión (Stream Key) para: ${missingKeys.map(k => k.toUpperCase()).join(', ')}` 
+      });
     }
 
     const streamId = uuidv4();
-    const videoPath = path.join(videosDir, fs.readdirSync(videosDir).find(f => f.startsWith(videoId)));
+    const files = fs.readdirSync(videosDir);
+    const targetFile = files.find(f => f.startsWith(videoId) || f === videoId);
 
-    if (!fs.existsSync(videoPath)) {
+    if (!targetFile) {
       return res.status(404).json({ error: 'Video no encontrado' });
     }
 
-    // Iniciar streaming
+    const videoPath = path.join(videosDir, targetFile);
+
+    // Iniciar streaming con FFmpeg
     startStream(streamId, videoPath, selectedPlatforms);
 
     res.json({ 
@@ -349,7 +375,7 @@ app.post('/api/stream/start', (req, res) => {
     });
   } catch (error) {
     console.error('Error al iniciar transmisión:', error);
-    res.status(500).json({ error: 'Error al iniciar transmisión' });
+    res.status(500).json({ error: 'Error al iniciar transmisión: ' + error.message });
   }
 });
 
@@ -360,7 +386,6 @@ app.post('/api/stream/stop/:streamId', (req, res) => {
     
     if (activeStreams[streamId]) {
       activeStreams[streamId].ffmpegCommand.kill();
-      // limpiar timer de viewers si existe
       try { clearInterval(activeStreams[streamId].viewersTimer); } catch (e) {}
       delete activeStreams[streamId];
       
@@ -386,7 +411,6 @@ app.get('/api/streams/status', (req, res) => {
     }));
 
     const scheduled = scheduledStreams.filter(s => s.status === 'scheduled');
-
     const totalViewers = active.reduce((acc, a) => acc + (a.viewers || 0), 0);
 
     res.json({ 
@@ -401,14 +425,31 @@ app.get('/api/streams/status', (req, res) => {
   }
 });
 
-// 7. Actualizar configuración de plataformas
+// 7. Configuración de plataformas
+app.get('/api/platforms/config', (req, res) => {
+  try {
+    const result = {};
+    Object.keys(platforms).forEach(p => {
+      result[p] = {
+        rtmp: platforms[p].rtmp,
+        key: platforms[p].key || '',
+        hasKey: !!platforms[p].key
+      };
+    });
+    res.json({ platforms: result });
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener configuración de plataformas' });
+  }
+});
+
 app.post('/api/platforms/config', (req, res) => {
   try {
-    const { platform, streamKey } = req.body;
+    const { platform, streamKey, rtmpUrl } = req.body;
     
     if (platforms[platform]) {
-      platforms[platform].key = streamKey;
-      res.json({ success: true, message: `Stream key de ${platform} actualizada` });
+      if (streamKey !== undefined) platforms[platform].key = streamKey.trim();
+      if (rtmpUrl !== undefined) platforms[platform].rtmp = rtmpUrl.trim();
+      res.json({ success: true, message: `Configuración de ${platform} actualizada` });
     } else {
       res.status(400).json({ error: 'Plataforma no soportada' });
     }
