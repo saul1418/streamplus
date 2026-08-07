@@ -36,6 +36,16 @@ if (fs.existsSync(webDistPath)) {
   app.use(express.static(webDistPath));
 }
 
+// Endpoint para descargar la aplicación Android APK
+app.get('/StreamPlusStudio.apk', (req, res) => {
+  const apkPath = path.join(__dirname, '../../StreamPlusStudio.apk');
+  if (fs.existsSync(apkPath)) {
+    res.download(apkPath, 'StreamPlusStudio.apk');
+  } else {
+    res.status(404).json({ error: 'Archivo APK no encontrado' });
+  }
+});
+
 // Session middleware
 app.use(session({
   secret: process.env.SESSION_SECRET || 'streamplus-secret',

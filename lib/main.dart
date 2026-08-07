@@ -89,6 +89,20 @@ class _StreamPlusMainState extends State<StreamPlusMain> {
     'twitter': false, 'instagram': false, 'tiktok': false
   };
 
+  final Map<String, TextEditingController> keyCtrls = {
+    'youtube': TextEditingController(),
+    'facebook': TextEditingController(),
+    'twitch': TextEditingController(),
+    'twitter': TextEditingController(),
+    'instagram': TextEditingController(),
+    'tiktok': TextEditingController(),
+  };
+
+  final Map<String, bool> showKeysMap = {
+    'youtube': false, 'facebook': false, 'twitch': false, 
+    'twitter': false, 'instagram': false, 'tiktok': false
+  };
+
   Timer? streamTimer;
   Timer? viewersTimer;
   Timer? chatTimer;
@@ -105,6 +119,9 @@ class _StreamPlusMainState extends State<StreamPlusMain> {
     titleCtrl.dispose();
     descCtrl.dispose();
     watermarkCtrl.dispose();
+    for (var ctrl in keyCtrls.values) {
+      ctrl.dispose();
+    }
     _cancelTimers();
     super.dispose();
   }
@@ -194,12 +211,23 @@ class _StreamPlusMainState extends State<StreamPlusMain> {
           .map((e) => e.key)
           .toList();
 
+      final Map<String, String> activeKeys = {};
+      for (var p in activePlatforms) {
+        final key = keyCtrls[p]?.text.trim() ?? '';
+        if (key.isEmpty) {
+          _showMsg('Ingresa la Clave de Transmisión (Stream Key) para ${p.toUpperCase()}', isError: true);
+          return;
+        }
+        activeKeys[p] = key;
+      }
+
       final response = await http.post(
         Uri.parse('$_baseUrl/stream/start'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'videoId': selectedVideoId,
           'platforms': activePlatforms,
+          'streamKeys': activeKeys,
           'title': titleCtrl.text,
           'description': descCtrl.text,
         }),
@@ -742,26 +770,112 @@ class _StreamPlusMainState extends State<StreamPlusMain> {
         ),
         const SizedBox(height: 16),
 
-        // Destinos
+        // Destinos & Claves de Transmisión
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Redes Sociales', style: TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8, runSpacing: 8,
-                  children: platforms.keys.map((p) => ChoiceChip(
-                    label: Text(p.toUpperCase()),
-                    selected: platforms[p]!,
-                    selectedColor: Colors.indigo.withOpacity(0.5),
-                    onSelected: isStreaming ? null : (bool selected) {
-                      setState(() => platforms[p] = selected);
-                    },
-                  )).toList(),
+                const Row(
+                  children: [
+                    Icon(Icons.key, color: Colors.indigoAccent, size: 20),
+                    SizedBox(width: 8),
+                    Text('Redes Sociales & Claves RTMP', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  ],
                 ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Activa tus redes e ingresa la Clave de Transmisión (Stream Key) para transmitir simultáneamente:',
+                  style: TextStyle(fontSize: 12, color: Colors.white70),
+                ),
+                const SizedBox(height: 12),
+                ...platforms.keys.map((p) {
+                  final isEnabled = platforms[p]!;
+                  final ctrl = keyCtrls[p]!;
+                  final isShow = showKeysMap[p] ?? false;
+
+                  final platformHints = {
+                    'youtube': 'YouTube Studio ➔ Transmitir en vivo ➔ Clave de emisión',
+                    'facebook': 'Facebook Live Producer ➔ Clave de transmisión',
+                    'twitch': 'Twitch Dashboard ➔ Configuración ➔ Clave de transmisión',
+                    'instagram': 'Instagram Live Producer ➔ Clave RTMP',
+                    'tiktok': 'TikTok LIVE Studio / Creator Center ➔ Stream Key',
+                    'twitter': 'X Media Studio / Producer ➔ Key de emisión',
+                  };
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: isEnabled ? Colors.indigo.withOpacity(0.15) : Colors.black26,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isEnabled ? Colors.indigoAccent : Colors.white10,
+                        width: isEnabled ? 1.5 : 1.0,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Text(p.toUpperCase(), style: TextStyle(fontWeight: FontWeight.bold, color: isEnabled ? Colors.indigoAccent : Colors.white)),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isEnabled ? Colors.green : Colors.grey,
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    isEnabled ? 'ACTIVA' : 'INACTIVA',
+                                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.white),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            Switch(
+                              value: isEnabled,
+                              activeColor: Colors.indigoAccent,
+                              onChanged: isStreaming ? null : (val) {
+                                setState(() => platforms[p] = val);
+                              },
+                            ),
+                          ],
+                        ),
+                        if (isEnabled) ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: ctrl,
+                            obscureText: !isShow,
+                            enabled: !isStreaming,
+                            decoration: InputDecoration(
+                              labelText: 'Clave de Transmisión (${p.toUpperCase()})',
+                              hintText: 'Pegar Stream Key...',
+                              isDense: true,
+                              border: const OutlineInputBorder(),
+                              suffixIcon: IconButton(
+                                icon: Icon(isShow ? Icons.visibility_off : Icons.visibility, size: 20),
+                                onPressed: () {
+                                  setState(() => showKeysMap[p] = !isShow);
+                                },
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '💡 ${platformHints[p] ?? ''}',
+                            style: const TextStyle(fontSize: 10, color: Colors.white54),
+                          ),
+                        ]
+                      ],
+                    ),
+                  );
+                }),
               ],
             ),
           ),
